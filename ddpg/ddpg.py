@@ -108,6 +108,27 @@ class DDPG():
         np.save(self.log_dir + '/results_train.npy', np.array(results))
 
 
+    def eval_all(self, model_dir, num_eps=10):
+        results = []
+        for model_fname in sorted(os.listdir(model_dir), key=lambda x: int(x.split('_')[2])):
+            print(model_fname)
+            mu = torch.load(os.path.join(model_dir, model_fname))
+            r,t = self.eval(num_eps=num_eps, mu=mu)
+            results.append([r,t])
+        np.save(self.log_dir+'/results_eval.npy', np.array(results))
+
+    def eval(self, num_eps=10, mu=None):
+        if mu == None:
+            mu = self.mu
+
+        results = []
+        mu = mu.eval()
+        for i in range(num_eps):
+            r, t = self.run_eval_episode(mu=mu)
+            results.append([r,t])
+            print('{} reward: {:.2f}, length: {}'.format(i,r,t))
+        return np.mean(results, axis=0)
+
     def run_eval_episode(self, mu=None):
         if mu == None:
             mu = self.mu
@@ -123,26 +144,6 @@ class DDPG():
             s = torch.tensor(s_p.astype(np.float32), requires_grad=False)
         return tot_r, t
 
-    def eval_all(self, model_dir):
-        results = []
-        for model_fname in sorted(os.listdir(model_dir), key=lambda x: int(x.split('_')[2])):
-            print(model_fname)
-            mu = torch.load(os.path.join(model_dir, model_fname))
-            r,t = self.eval(num_eps=10, mu=mu)
-            results.append([r,t])
-        np.save(self.log_dir+'/results_eval.npy', np.array(results))
-
-    def eval(self, num_eps=100, mu=None):
-        if mu == None:
-            mu = self.mu
-
-        results = []
-        mu = mu.eval()
-        for i in range(num_eps):
-            r, t = self.run_eval_episode(mu=mu)
-            results.append([r,t])
-            print('{} reward: {:.2f}, length: {}'.format(i,r,t))
-        return np.mean(results, axis=0)
 
     def fill_buffer(self):
         print('Filling buffer')
