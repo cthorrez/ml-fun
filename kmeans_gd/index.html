@@ -1,0 +1,233 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+<head>
+<title>kmeans</title>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript"
+  src="MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+<h2>K-means Clustering with Gradient Based Optimization</h2>
+
+By Clayton Thorrez
+
+<h3>Background on K-means Clustering</h3>
+<p>
+  If you have learned about unsupervised learning or clustering, chances are one of the first methods you learned is <a href=https://en.wikipedia.org/wiki/K-means_clustering>k-means clustering</a>. K-means is a way to group points of data into discrete bins based on their similarity to each other. If you have a data set and you suspect that there is some underlying structure where it could be useful to group similar points together and you have an idea of how many groups you want to seperate the data into, k-means is simple, (pretty) fast and effective if the data doesn't violate some mathematical assumptions. The idea of grouping similar points together can be accomplished by minimizing the following loss function. $C_i$ represents the set of points currently assigned to cluster $i$.
+  $$L = \sum_{i=1}^k \sum_{\mathbf{x} \in C_i} \frac{1}{2} \lvert \lvert \mathbf{\mu}_i - \mathbf{x} \rvert \rvert^2$$
+  This is the sum over all clusters, over all points in that cluster, of the squared distance between that point and that cluster's centroid. The $\frac{1}{2} is just a constant factor which does not change the solution but makes the derivatives cleaner.  
+  <figure>
+    <center>
+      <img src="figures/unclustered_s1.png" style="width:40%">
+      <figcaption>Figure 1. An example of a data set which could be divided into 15 clusters </figcaption>
+    </center>
+</figure>
+</p>
+<h4>Lloyd's Algorithm</h2>
+<p>
+  The standard algorithm for performing k-means clustering and minimizing the above loss function is called Lloyd's algorithm which is actually an example of <a href=https://en.wikipedia.org/wiki/Expectation%E2%80%93maximization_algorithm>expectation maximization</a>. The algorithm is fairly simple with only a few steps.
+  <ol>
+    <li>Initialize k centroid vectors</li>
+    <li>Repeat until convergence:</li>
+    <ol>
+      <li>Assign each point to closest centroid to it</li>
+      <li>Update each centroid to be the mean of all points assigned to it</li>
+    </ol>
+  </ol>
+  Convergence is determined when the loss between iterations does not decrease any further. This algorithm is mathematically guaranteed to either decrease the loss every iteration before convergence so the final assignment will always be a local minimum of the loss function. The quality of the minimum reached is usually dependent on how you initialize the cluster centroids. The most popular initialization in the <a href=https://en.wikipedia.org/wiki/K-means%2B%2B>k-means++</a> method which picks datapointsbased on their distances to other clusters. It is also common practice to start with many different initailizations, fit k-means for each and then discard all but the one with the lowest loss. These operations can be easily parallelized since they are independent. 
+</p>
+
+<h3>Gradient Descent</h3>
+<p>
+  It occurred to me in class at some point that most of the supervised learning method I know about also involve minimizing a loss function but they go about it in a very different way. Most commonly, you compute the gradient of the loss with respect to adjustible parameters and then update the parameters in the opposite direction of the gradient. This was a very different setup from the common k-means optimization method and I wondered why that was. At first I thought it was becasue assigning points to clusters is a discrete operation whereas the parameters in a logistic regression, linear svm or neural network are continuous so the same optimization techniques might not be applicable. However I then realized that in Lloyd's algorithm, the assignments are not actually what we are optimizing. We are optimizing the locations of the centroids which are continuous and the assignments are just a function of the data and the centroids. After a little investiation I found a <a href=https://stats.stackexchange.com/questions/69224/why-isnt-k-means-optimized-using-gradient-descent>stack overflow thread</a> and a <a href=http://papers.nips.cc/paper/989-convergence-properties-of-the-k-means-algorithms.pdf>paper</a> by L&eacute;on Bottou and Yoshua Bengio confirming that the k-means loss function is in fact differentiable with respect to the centroids and therefore should be optimizable via gradient descent.
+  The equation for the gradient is given below. 
+  $$\frac{\partial L}{\partial \mathbf{\mu}_i} = \sum_{\mathbf{x} \in C_i} (\mathbf{\mu}_i - \mathbf{x}) = N_i\mathbf{\mu}_i - \sum_{\mathbf{x}\in C_i}\mathbf{x}$$
+  Where $N_i$ is the number of elements in cluster $i$. In gradient descent the new estimate for the centroid is calculated by subtracting  the above gradient scaled by a small step size $\epsilon$ from the previous centroid estimate. In our case it looks liek this.
+  $$\mathbf{\mu}_{i_{new}} \leftarrow \mathbf{\mu}_{i_{old}} - \epsilon N_i\mathbf{\mu}_{i_{old}} + \epsilon \sum_{\mathbf{x}\in C_i}\mathbf{x}$$
+  When we examine this equation we can interpret it quite nicely in the context of k-means. The first subtraction can be seen as a scaling of the old mean. $$\mathbf{\mu}_{i_{old}} - \epsilon N_i\mathbf{\mu}_{i_{old}} = \mathbf{\mu}_{i_{old}}(1 - \epsilon N_i)$$
+
+  If the step size is smaller than $\frac{1}{N_i}$ (It is usually a very small number so this is satisfied in my experiments) then the scaling is a shrinkage. The second part, $\epsilon \sum_{\mathbf{x}\in C_i}\mathbf{x}$ is the addition of the sum of all points in the cluster scaled down by the step size. This makes sense when you recall that the sum of all points is just a rescaling of the mean of all points. So whereas in Lloyd's algorithm, the new centroid is exactly the mean of the points, in gradient descent, the old centroid is scaled down, and then takes a small step in the direcion of the mean of the points. Given this interpretation of the update, it makes sense that with a sufficiently small step siz, that gradient descent would also reach a local minimum of the loss function but in more iterations becasue it makes a smaller step towards the same target as Lloyd's alorithm. It could theoretically reach a different minimum from Lloyd's algorithm as the direction of update could be different from Lloyd's based on a different assignment as a result of the centroids differing due to the smaller initial update. 
+</p>
+
+<h3>Newton's Method</h3>
+<p>
+  Another really interesting thing I learned in the Bottou and Bengio paper was that Lloyd's algorithm is actually closely related gradient based optimization methods. In fact it is mathematically <i>identical</i> to Newton's method. Traditionally <a href=https://en.wikipedia.org/wiki/Newton%27s_method>Newton's method</a> is a way of finding roots of a function, when applied to the derivative of a convex loss function, the root is the location of the minimum so it is also very useful in <a href=https://en.wikipedia.org/wiki/Newton%27s_method_in_optimization>optimization</a>. Newton's method uses the secon derivative of the function to be able to take the curvature of the loss surface into account and make more direct updates. In general it can converge in many less iterations than gradient descent however, each iteration involves computing and inverting the <a href=https://en.wikipedia.org/wiki/Hessian_matrix>Hessian matrix</a> which can be prohibitively expensive if the dimensionality is high. The Newton's method update is shown below where $\mathbf{H}$ is the Hessian of $L$ with respect to the centroids.
+  $$ \mathbf{\mu}_{i_{new}} \leftarrow \mathbf{\mu}_{i_{old}} - \mathbf{H}^{-1} \frac{\partial L}{\partial \mathbf{\mu}_i} $$
+  The first term in the update is the same gradient we used above in gradient descent, the second term, the Hessian is a $dk$ by $dk$ matrix of partial second derivatives where $d$ is the dimensionality of a single point and $k$ is the number of centroids. This is because $dk$ is the number of free parameters since there are $k$ centroids and each one is the same dimensionality as a normal data point. The Hessian is a square matrix where each element is the second derivative of the loss. In the $i$th row and $j$th column, the Hessian is the loss differentiated once with respect to the $i$th parameter, and again with respect to the $j$th parameter. 
+</p>
+<p>
+  To try not to get too confused about notation I'll clarify a few things here. I have been using $\mathbf{\mu}_i$ to refer to a $d$ dimensional single centroid vector. So the entire set of parameters is $dk$ as there are $k$ of these centroid vectors. For the next equation I will use $\mathbf{M}$ to represent a flattened vector of all parameters. It is a concatenation of all of the centroid vectors. The subscript $i$ was previously between $1$ and $k$ and identified a cluster. In this equation subscripts $i$ and $j$ range from $1$ to $dk$ and each identify a single element of $\mathbf{M}$. Since the Hessian is $dk$ by $dk$, together $i$ and $j$ index one element of $\mathbf{H}$.
+  $$\mathbf{H}_{i,j} = \frac{\partial L}{\partial \mathbf{M}_{i} \partial\mathbf{M}_{j}}$$
+  So lets think about what these derivatives look like. Remember the first derivative with respect to $\mathbf{\mu}_i$ is:
+  $$\frac{\partial L}{\partial \mathbf{\mu}_i} = N_i\mathbf{\mu}_i - \sum_{\mathbf{x}\in C_i}\mathbf{x}$$
+  Essentially to get the Hessian, you would take the derivatives of each element of each gradient with respect to each parameter. When doing this the second term, the sum of $\mathbf{x}$'s entirely disappears. For the $N_i\mathbf{\mu}_i$ part it depends on which parameter you are differentiating with respect to. If you are diffentiting with respect to a different parameter than the one the first derivative was taken with respect to, the result is 0. However if you are evaluating the loss with respect to the same parameter twice, the result is $N_i$. That is, the count of the points in that cluster. This is because the first derivative is $N_i\mathbf{\mu}_i$ which is just multiplying each element of the centroid by a constant, so the derivative of each element of the resulting vector is just that constant. So the resulting Hessian is a diaonal matrix with cluster counts on the diagional.
+
+  $$\mathbf{H} = 
+    \begin{bmatrix}
+    N_1 & 0 & \dots  & 0 & 0 \\
+    0 & N_1 & \dots  & 0 & 0 \\
+    \vdots & \vdots & \ddots & \vdots & \vdots \\
+    0 & 0 &  \dots & N_k & 0\\
+    0 & 0 & \dots & 0  & N_k
+\end{bmatrix} $$
+In this example Hessian, the points are in two dimensions, so each count appears twice on the diagonal. In general $d$ dimensional cases each count will be repeated $d$ times on the diagonal. 
+</p>
+<p>
+  Now that we have the Hessian, we can move forward. The next step is inverting the Hessian. This is actually really easy in this case becasue the inverse of a diagonal matrix can be calculated just by inverting each diagonal element.
+    $$\mathbf{H}^{-1} = 
+    \begin{bmatrix}
+    \frac{1}{N_1} & 0 & \dots  & 0 & 0 \\
+    0 & \frac{1}{N_1} & \dots  & 0 & 0 \\
+    \vdots & \vdots & \ddots & \vdots & \vdots \\
+    0 & 0 &  \dots & \frac{1}{N_k} & 0\\
+    0 & 0 & \dots & 0  & \frac{1}{N_k}
+  \end{bmatrix} $$
+  Matrix vector multiplication with a diagonal matrix is also easy. It's just a dot product of the diagonal elements of the matrix and the vector. So when multiplying the gradient by the inverse Hessian, you just divide the gradient by the appropriate $N_i$. Thus the update equation for a single mean is:
+  $$\mathbf{\mu}_{i_{new}} \leftarrow \mathbf{\mu}_{i_{old}} - \frac{1}{N_i} N_i\mathbf{\mu}_{i_{old}} + \frac{1}{N_i}\sum_{\mathbf{x}\in C_i}\mathbf{x}$$
+  Now you can see the $\frac{1}{N_i}$ and $N_i$ cancel out to $1$. This allows the two $\mathbf{\mu}_{i_{old}}$s to cancel out to $0$ leaving only $\frac{1}{N_i}\sum_{\mathbf{x}\in C_i}\mathbf{x}$, which is the mathematical equation for the mean of the elements in the cluster. So in all of that work in deriving the gradient, deriviving and inverting the Hessian, and applyin Newton's method of optimization we ended up with just taking the mean, which is exactly where we started with Lloyd's algorithm.
+</p>
+
+<h3>Experiments</h3>
+<p>
+  With all of the math done, I thought it would be fun to put the theory to the test and actually implement k-means clustering using gradient descent and Newton's method. I made pytorch <a href=https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html>Modules</a> which had the cluster centroids as free parameters and the forward pass computes the loss. Then becasue autograd is awesome, I can get the gradient of the loss with respect to the centroids easily. Then to construct the Hessian, I take the gradient of each element of the gradient with respect to the centroids. The gradient of each element returns a row which I stack into matrix. If you are interested in the implementation details I've made the code available <a href=https://github.com/cthorrez/ml-fun/tree/master/kmeans_gd>here</a>.
+</p>
+<h4>Correctness Experiments</h4>
+<p>
+  First I wanted to test if the gradient descent and Newton's method verion of k-means even worked so I clustered the s1 dataset above using all three methods.
+  <div class="row">
+    <div class="column">
+      <img src="figures/clusters_s1_lloyd.png" alt="Lloyd's" style="width:100%" class="zoom">
+    </div>
+    <div class="column">
+      <img src="figures/clusters_s1_sgd.png" alt="gradient descent" style="width:100%" class="zoom">
+    </div>
+    <div class="column">
+      <img src="figures/clusters_s1_nr.png" alt="Newton's method" style="width:100%" class="zoom">
+    </div>
+  </div>
+  In case you are straining your eyes to check them, they are all the same and they all correctly identified the 15 correct clusters present in the data. Pretty cool that three pretty different methods can solve the problem in the same way. 
+</p>
+<h4>Loss Experiments</h4>
+<p>
+  To test the convergence properties of the various optimization methods I plotted their losses per at eah iteration on 4 data sets. The s1 data set shown above and the s2, s3, and s4 data sets as well. They are all 2 dimensional data sets with 15 clusters. The difference is that they have increasing amounts of noise and overlap between clusters. These datasets were made available by some researchers in Finland <a href=http://cs.joensuu.fi/sipu/datasets/>here</a>.
+
+  <!-- Slideshow container -->
+  <div class="slideshow-container">
+    <!-- Full-width images with number and caption text -->
+    <div class="mySlides fade">
+      <div class="numbertext">1 / 4</div>
+      <img src="figures/loss_s1.png" style="width:75%">
+    </div>
+
+    <div class="mySlides fade">
+      <div class="numbertext">2 / 4</div>
+      <img src="figures/loss_s2.png" style="width:75%">
+    </div>
+
+    <div class="mySlides fade">
+      <div class="numbertext">3 / 4</div>
+      <img src="figures/loss_s3.png" style="width:75%">
+    </div>
+
+    <div class="mySlides fade">
+      <div class="numbertext">4 / 4</div>
+      <img src="figures/loss_s4.png" style="width:75%">
+    </div>
+
+    <!-- Next and previous buttons -->
+    <a class="prev" onclick="plusSlides(-1)">&#10094;</a>
+    <a class="next" onclick="plusSlides(1)">&#10095;</a>
+  </div>
+
+  <!-- The dots/circles -->
+  <div style="text-align:center">
+    <span class="dot" onclick="currentSlide(1)"></span> 
+    <span class="dot" onclick="currentSlide(2)"></span> 
+    <span class="dot" onclick="currentSlide(3)"></span> 
+    <span class="dot" onclick="currentSlide(4)"></span>
+  </div>
+
+  There are a couple of really cool patterns in these graphs. The first and most exciting is that the Lloyd's algorithm and Newton's method lines are always completely overlapping. It's one thing to theoretically demonstrate that two things are equal, it's a lot more satisfying when it also works out in practice. Another cool result is that Lloyd's/Newton's in all of these cases converges in (often significantly) less iterations than the gradient descent method. This supports the idea that second derivative curvature information can aide in the optiization process. 
+</p>
+<p>
+  There is something especially interesting about the last data set. On the s4 data set, the gradient descent algorithm takes a very different optimization path than the other two algorithms. In this case even at the same iteration number gradient descent passes the other methods and has a better loss at some points before Lloyd's/Newton's pulls ahead at the end. This isdue to the phenomenon mentione above where the smaller gradient update can lead to different assignments and different future updates between the algorithms. In this case the gradient descent method actually converges to a different local minimum than Lloyd's/Newton's.
+  <div class="row">
+    <div class="column">
+      <img src="figures/clusters_s4_lloyd.png" alt="Lloyd's" style="width:100%">
+    </div>
+    <div class="column">
+      <img src="figures/clusters_s4_sgd.png" alt="gradient descent" style="width:100%">
+    </div>
+  </div>
+  If you look at the top left, Lloyd's/Newton's have two clusters in that region whereas gradient descent only has one centroid there. The gradient method puts that extra cluster over on the midle right between a blue and purple cluster. There is so much noise in this data set that it is difficult to determine which clustering is better but the Lloyd/Newton clusteringhas slightly lower loss. Mostly it is just interesting to observe the two methods getting different results. 
+</p>
+
+<h3>Time Experiments</h3>
+<p>
+  So we saw that in most cases, Newton's method and Lloyd's Algorithm converge in less iterations than gradient descent, but the compute cost per iteration is different for the three methods so I though I would do an experiment on the wall clock time it takes to fit the means with each algorithm. I testing fitting each algorithm on 5 data sets, each with 1024 data points, 16 clusters and varyin dimensions. They all follow the same general cluster distribution but in dimensions 8, 16, 32, 64, and 128. (I actually tried with 256 dimensions as well but the Hessian in Newton's method used all my memory and crashed my computer.)
+  <div class="row">
+    <div class="column">
+      <img src="figures/time_dim.png" style="width:100%">
+    </div>
+    <div class="column">
+      <img src="figures/time_dim_noNR.png" alt="gradient descent" style="width:100%">
+    </div>
+  </div>
+  In the first graph we can see that the time to fit k-means with Newton's method increases worse than linearly with dimension. This makes sense because it involves computing and inverting a Hessian which is quadratic in the number of dimensions. Optimizing with Newton's method is so slow that it actually makes gradient descent and Lloyd's algorithm look like they scale at practically the same rate. It looks like their two lines are exactly overlapping. However in the second graph when you plot them without Newton's method, we can see that even gradient descent scales significantly worse with dimension than Lloyd's algorithm. Basically no gradient based method can ever hope to compete with Lloyd's algorithm becasue they all involve computing the loss and extra steps. In Lloyd's algorithm, you have to compute the loss to check for convergence but that is it. Computing the loss includes computing the distances from each point to each cluster. Once the distances are computed, the new assignments and means are essentially constant time computations. In contrast, gradient descent has the extra overhead of computing gradients, it also usually takes more iterations, and Newton's method has the incredibly expensive Hessian operations after computing the loss. 
+</p>
+
+
+
+<h3>Conclusions</h3>
+<p>
+  The k-means loss function can be minimized by gradient descent and Newton's method, however it is computationally much more expensive and does not offer many benefits. The step size of gradient descent can also cause optimization to reach a different local minimum from Lloyd's algorithm or Newton's method even if they all start with the same initialization. 
+
+  Overall, even if they were not effective, I had a lot of fun implementing k-means using gradient descent and Newton's method. I also learned some cool tricks in pytorch to be able to take higher order derivatives, brushed up on my object oriented programming while making inherited KMeans classes, practiced my multiprocess programming by parallelizing fitting of different initializations. Working on this project also helped me appreciate the mathematical depth in one of the simplest algorithms in machine learning by seing how it realated to other concepts in machine learning and optimization. If you are still curious about the details you can check out the code <a href=https://github.com/cthorrez/ml-fun/tree/master/kmeans_gd>here</a> or feel fre to shoot me an email at <img src="figures/umass.png" width=16%>.
+</p>
+
+
+<h4>References</h4>
+
+Bottou, Leon, and Yoshua Bengio. "Convergence properties of the k-means algorithms." Advances in neural information processing systems. 1995.
+<br>
+Fr&auml;nti, Pasi, and Sami Sieranoja. "K-means properties on six clustering benchmark datasets." Applied Intelligence 48.12 (2018): 4743-4759.
+</body>
+
+
+
+<script type="text/javascript">
+var slideIndex = 1;
+showSlides(slideIndex);
+
+// Next/previous controls
+function plusSlides(n) {
+  showSlides(slideIndex += n);
+}
+
+// Thumbnail image controls
+function currentSlide(n) {
+  showSlides(slideIndex = n);
+}
+
+function showSlides(n) {
+  var i;
+  var slides = document.getElementsByClassName("mySlides");
+  var dots = document.getElementsByClassName("dot");
+  if (n > slides.length) {slideIndex = 1} 
+  if (n < 1) {slideIndex = slides.length}
+  for (i = 0; i < slides.length; i++) {
+      slides[i].style.display = "none"; 
+  }
+  for (i = 0; i < dots.length; i++) {
+      dots[i].className = dots[i].className.replace(" active", "");
+  }
+  slides[slideIndex-1].style.display = "block"; 
+  dots[slideIndex-1].className += " active";
+}
+</script>
+
