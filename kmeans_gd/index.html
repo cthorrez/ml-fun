@@ -20,7 +20,7 @@ By Clayton Thorrez
 <p>
   If you have learned about unsupervised learning or clustering, chances are one of the first methods you learned is <a href=https://en.wikipedia.org/wiki/K-means_clustering>k-means clustering</a>. K-means is a way to group points of data into discrete bins based on their similarity to each other. If you have a data set and you suspect that there is some underlying structure where it could be useful to group similar points together and you have an idea of how many groups you want to seperate the data into, k-means is simple, (pretty) fast and effective if the data doesn't violate some mathematical assumptions. The idea of grouping similar points together can be accomplished by minimizing the following loss function. $C_i$ represents the set of points currently assigned to cluster $i$.
   $$L = \sum_{i=1}^k \sum_{\mathbf{x} \in C_i} \frac{1}{2} \lvert \lvert \mathbf{\mu}_i - \mathbf{x} \rvert \rvert^2$$
-  This is the sum over all clusters, over all points in that cluster, of the squared distance between that point and that cluster's centroid. The $\frac{1}{2} is just a constant factor which does not change the solution but makes the derivatives cleaner.  
+  This is the sum over all clusters, over all points in that cluster, of the squared distance between that point and that cluster's centroid. The $\frac{1}{2}$ is just a constant factor which does not change the solution but makes the derivatives cleaner.  
   <figure>
     <center>
       <img src="figures/unclustered_s1.png" style="width:40%">
