@@ -89,7 +89,7 @@ In this example Hessian, the points are in two dimensions, so each count appears
   \end{bmatrix} $$
   Matrix vector multiplication with a diagonal matrix is also easy. It's just a dot product of the diagonal elements of the matrix and the vector. So when multiplying the gradient by the inverse Hessian, you just divide the gradient by the appropriate $N_i$. Thus the update equation for a single mean is:
   $$\mathbf{\mu}_{i_{new}} \leftarrow \mathbf{\mu}_{i_{old}} - \frac{1}{N_i} N_i\mathbf{\mu}_{i_{old}} + \frac{1}{N_i}\sum_{\mathbf{x}\in C_i}\mathbf{x}$$
-  Now you can see the $\frac{1}{N_i}$ and $N_i$ cancel out to $1$. This allows the two $\mathbf{\mu}_{i_{old}}$s to cancel out to $0$ leaving only $\frac{1}{N_i}\sum_{\mathbf{x}\in C_i}\mathbf{x}$, which is the mathematical equation for the mean of the elements in the cluster. So in all of that work in deriving the gradient, deriving and inverting the Hessian, and applyin Newton's method of optimization we ended up with just taking the mean, which is exactly where we started with Lloyd's algorithm.
+  Now you can see the $\frac{1}{N_i}$ and $N_i$ cancel out to $1$. This allows the two $\mathbf{\mu}_{i_{old}}$s to cancel out to $0$ leaving only $\frac{1}{N_i}\sum_{\mathbf{x}\in C_i}\mathbf{x}$, which is the mathematical equation for the mean of the elements in the cluster. So in all of that work in deriving the gradient, deriving and inverting the Hessian, and applying Newton's method of optimization we ended up with just taking the mean, which is exactly where we started with Lloyd's algorithm.
 </p>
 
 <h3>Experiments</h3>
