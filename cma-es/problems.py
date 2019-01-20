@@ -63,6 +63,8 @@ class LunarLander(Problem):
     def score_vec(self, X):
         p = Pool(4)
         return p.map(self.score, [x for x in X])
+        p.close()  
+        p.join()  
         
     def save(self, x, g):
         self.mu.fill_weights(x)
